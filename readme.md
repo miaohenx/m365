@@ -41,12 +41,7 @@ BASE_URL=http://localhost:8001
 PORT=8001
 HOST=0.0.0.0
 
-# Microsoft Graph API Configuration
-MICROSOFT_CLIENT_ID=your_client_id
-MICROSOFT_CLIENT_SECRET=your_client_secret
-MICROSOFT_TENANT_ID=your_tenant_id
-
-3. **Start with Docker Compose**
+1. **Start with Docker Compose**
 
 docker-compose up -d
 
