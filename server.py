@@ -9,45 +9,6 @@ load_dotenv()
 
 mcp = FastMCP("My MCP Server with Graph API 🚀")
 
-# 保留您的测试方法
-@mcp.tool
-def greet(name: str) -> str:
-    """问候指定的人员
-    
-    Args:
-        name: 要问候的人的姓名
-        
-    Returns:
-        问候语字符串
-    """
-    return f"Hello, {name}!"
-
-@mcp.tool  
-def add(a: int, b: int) -> int:
-    """计算两个整数的和
-    
-    Args:
-        a: 第一个整数
-        b: 第二个整数
-        
-    Returns:
-        两数之和
-    """
-    return a + b
-
-@mcp.tool
-def subtract(a: int, b: int) -> int:
-    """计算两个整数的差
-    
-    Args:
-        a: 被减数
-        b: 减数
-        
-    Returns:
-        两数之差
-    """
-    return a - b
-
 # 健康检查端点
 @mcp.tool
 def health_check() -> str:
