@@ -1,0 +1,30 @@
+# Core MCP dependencies
+fastmcp==2.14.5
+mcp==1.26.0
+
+# HTTP and async support
+aiohttp==3.13.3
+httpx==0.28.1
+requests==2.32.5
+
+# Environment and configuration
+python-dotenv==1.2.1
+pydantic==2.12.5
+pydantic-settings==2.12.0
+
+# MongoDB support
+pymongo==4.16.0
+motor==3.7.1
+
+# Microsoft Graph API support
+msal==1.34.0
+Authlib==1.6.6
+PyJWT==2.10.1
+
+# HTML processing (needed by your onedrive_service)
+html2text==2025.4.15
+beautifulsoup4==4.14.3
+
+# Utility libraries
+python-dateutil==2.9.0.post0
+cryptography==46.0.4
