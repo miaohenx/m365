@@ -1,7 +1,9 @@
 """
-OneDrive服务模块 - 统一的Microsoft Graph API客户端
-整合了文件操作、邮件、OneNote、Teams等功能
+OneDrive Service Module - Unified Microsoft Graph API Client
+Integrates file operations, email, OneNote, Teams and other functionalities
 """
+import io
+from openpyxl import load_workbook
 import requests
 import json
 import os
@@ -19,19 +21,19 @@ from datetime import datetime
 from .mongo_service import MongoTokenService
 from exceptions import MongoDBError
 
-# 禁用SSL警告
+# Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def log(message: str, level: str = "INFO"):
-    """统一的日志输出函数"""
+    """Unified logging function"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     print(f"[{timestamp}] [{level}] [OneDrive] {message}", file=sys.stderr)
 
 
-# HTML处理工具类
+# HTML processing utility classes
 class Mail2Text(BytesParser):
-    """邮件HTML转文本工具"""
+    """Email HTML to text converter"""
     def __init__(self, html_email_bytes):
         super().__init__(policy=policy.default)
         msg = self.parsebytes(html_email_bytes)
@@ -43,7 +45,7 @@ class Mail2Text(BytesParser):
 
 
 class BeautifulSoup(bs4.BeautifulSoup):
-    """自定义BeautifulSoup，优化HTML处理"""
+    """Custom BeautifulSoup with optimized HTML processing"""
     def __init__(self, html_content):
         super().__init__(html_content, 'html.parser')
         for br in self.find_all('br'): 
@@ -56,7 +58,7 @@ class BeautifulSoup(bs4.BeautifulSoup):
 
 
 class HTML2Text(html2text.HTML2Text):
-    """自定义HTML2Text转换器"""
+    """Custom HTML2Text converter"""
     def __init__(self):
         super().__init__()
         self.body_width = 0
@@ -65,9 +67,9 @@ class HTML2Text(html2text.HTML2Text):
         self.wrap_links = False
 
 
-# 数据容器类
+# Data container classes
 class Dir:
-    """目录数据容器"""
+    """Directory data container"""
     def __init__(self, json_data):
         self.json_data = json_data
     
@@ -79,20 +81,20 @@ class Dir:
 
 
 class Dict(dict):
-    """文件/文件夹数据容器"""
+    """File/folder data container"""
     def __repr__(self):
         return 'Dict({0})'.format(self['name'])
 
 
-# Teams相关类
+# Teams related classes
 class Base:
-    """Teams基础类"""
+    """Teams base class"""
     def __init__(self, value, onedrive):
         self.value = value
         self.onedrive = onedrive
 
     def is_less_days_by_now(self, date_str, days=0.5):
-        """检查日期是否在指定天数内"""
+        """Check if date is within specified days"""
         date_time = time.strptime(date_str.split('.')[0].rstrip('Z'), '%Y-%m-%dT%H:%M:%S')
         if date_time.tm_year >= 2020:
             return (time.time() - time.mktime(date_time)) < days * 24 * 3600
@@ -101,7 +103,7 @@ class Base:
 
 
 class Chat(Base):
-    """Teams聊天类"""
+    """Teams chat class"""
     def is_less_days_by_now(self, days=0.5):
         return super().is_less_days_by_now(self.value['viewpoint']['lastMessageReadDateTime'], days)
 
@@ -112,7 +114,7 @@ class Chat(Base):
 
 
 class Message(Base):
-    """Teams消息类"""
+    """Teams message class"""
     def is_less_days_by_now(self, days=0.5):
         return super().is_less_days_by_now(self.value['lastModifiedDateTime'], days)
 
@@ -120,19 +122,19 @@ class Message(Base):
         return self.value['body']['content']
 
 
-# 主要的OneDrive服务类
+# Main OneDrive service class
 class OneDriverService:
     """
-    统一的Microsoft Graph API客户端
-    整合了文件操作、邮件、OneNote、Teams等所有功能
+    Unified Microsoft Graph API Client
+    Integrates file operations, email, OneNote, Teams and all other functionalities
     """
     BASE_URL = os.environ.get("BASE_URL")
     def __init__(self, token: str):
         """
-        初始化OneDrive服务
+        Initialize OneDrive service
         
         Args:
-            token: unique_token（直接用于后端认证）
+            token: unique_token (used directly for backend authentication)
         """
         log(f"==================== 初始化 OneDriverService ====================")
         log(f"收到 token: {token[:20]}...{token[-10:]}")
@@ -148,7 +150,7 @@ class OneDriverService:
         log(f"=================================================================")
     
     def _make_request(self, method: str, url: str, **kwargs) -> requests.Response:
-        """统一的请求方法，包含详细日志"""
+        """Unified request method with detailed logging"""
         request_id = f"{int(time.time() * 1000)}"
         
         log(f"-------------------- 请求开始 [{request_id}] --------------------")
@@ -182,14 +184,14 @@ class OneDriverService:
             log(f"响应状态码: {response.status_code}")
             log(f"响应头: {dict(response.headers)}")
             
-            # 尝试解析响应内容
+            # Try to parse response content
             content_type = response.headers.get('Content-Type', '')
             if 'application/json' in content_type:
                 try:
                     response_json = response.json()
                     log(f"响应JSON数据 (前500字符): {json.dumps(response_json, ensure_ascii=False, indent=2)[:500]}...")
                     
-                    # 如果有错误信息，详细记录
+                    # Log error details if present
                     if 'error' in response_json:
                         log(f"❌ 响应包含错误: {json.dumps(response_json['error'], ensure_ascii=False, indent=2)}", "ERROR")
                 except json.JSONDecodeError as e:
@@ -248,7 +250,7 @@ class OneDriverService:
             raise
 
     def call_rest_api(self, api: str, init_func) -> Generator:
-        """通用的REST API调用方法，支持分页"""
+        """Generic REST API call method with pagination support"""
         log(f"📄 调用分页API: {api}")
         url = self.BASE_URL + api
         page_count = 0
@@ -272,10 +274,10 @@ class OneDriverService:
             else:
                 log(f"已到达最后一页")
 
-    # ================= 文件操作相关方法 =================
+    # ================= File operation methods =================
 
     def list_my_drive_items(self, path: str = '/', top: int = 100) -> Dict:
-        """列出用户 OneDrive 中的文件和文件夹"""
+        """List files and folders in user's OneDrive"""
         log(f"📁 列出文件 - 路径: {path}, 数量: {top}")
         
         if path == '/' or path == '':
@@ -298,7 +300,7 @@ class OneDriverService:
         return response_data
 
     def get_my_drive_item(self, path: str = '/') -> Dict:
-        """获取用户 OneDrive 中指定路径的项目信息"""
+        """Get item information at specified path in user's OneDrive"""
         log(f"📄 获取项目信息 - 路径: {path}")
         
         if path == '/' or path == '':
@@ -317,7 +319,7 @@ class OneDriverService:
         return item_data
 
     def url_to_base64(self, url: str) -> str:
-        """将分享URL转换为base64编码"""
+        """Convert sharing URL to base64 encoding"""
         log(f"🔐 转换分享URL为base64: {url[:50]}...")
         
         encoded = base64.b64encode(url.encode())
@@ -329,7 +331,7 @@ class OneDriverService:
         return result
 
     def get_driveitem(self, share_path: str):
-        """获取驱动器项目信息"""
+        """Get drive item information"""
         log(f"🔗 获取共享驱动器项目: {share_path}")
         
         self.url_root = self.BASE_URL + self.url_to_base64(share_path) + '/driveItem'
@@ -342,7 +344,7 @@ class OneDriverService:
         log(f"✅ 成功获取驱动器项目，根路径: {self.root}")
 
     def listdir(self, path: str) -> Dir:
-        """列出目录内容"""
+        """List directory contents"""
         log(f"📂 列出目录: {path}")
         
         result = self._make_request('GET', f"{self.root}{path}:/children")
@@ -353,7 +355,7 @@ class OneDriverService:
         return dir_data
 
     def downloadfile(self, file: str):
-        """下载文件"""
+        """Download file"""
         log(f"⬇️ 下载文件: {file}")
         
         result = self._make_request('GET', f"{self.root}{file}:/content")
@@ -367,7 +369,7 @@ class OneDriverService:
         log(f"✅ 文件已保存: {filename}")
 
     def search_files(self, query: str) -> Dict:
-        """搜索文件"""
+        """Search files"""
         log(f"🔍 搜索文件: {query}")
         
         if not hasattr(self, 'root'):
@@ -387,10 +389,10 @@ class OneDriverService:
         
         return search_results
 
-    # ================= 邮件相关方法 =================
+    # ================= Email related methods =================
     
     def get_me_email(self) -> str:
-        """获取当前用户邮箱地址"""
+        """Get current user's email address"""
         log(f"📧 获取用户邮箱")
         
         result = self._make_request('GET', f"{self.BASE_URL}/me/?$select=mail")
@@ -401,7 +403,7 @@ class OneDriverService:
         return email
 
     def get_mail_with_filter(self, filter_func, folder: str = "inbox") -> Generator[Dict, None, None]:
-        """获取邮件（支持过滤）"""
+        """Get emails with filter support"""
         log(f"📬 获取邮件 - 文件夹: {folder}")
         
         if folder:
@@ -432,7 +434,7 @@ class OneDriverService:
                 log(f"已到达最后一页")
 
     def send_mail(self, to: List[str], cc: List[str], subject: str, body: str) -> Dict:
-        """发送邮件"""
+        """Send email"""
         log(f"📤 发送邮件")
         log(f"收件人: {to}")
         log(f"抄送: {cc}")
@@ -478,7 +480,7 @@ class OneDriverService:
         return {"status": "sent", "status_code": result.status_code}
 
     def get_single_mail(self, message_id: str, select_fields: Optional[List[str]] = None) -> Dict:
-        """获取单个邮件"""
+        """Get single email"""
         log(f"📩 获取邮件详情 - ID: {message_id}")
         
         url = f"{self.BASE_URL}/me/messages/{message_id}"
@@ -495,7 +497,7 @@ class OneDriverService:
         return mail_data
 
     def reply_to_mail(self, message_id: str, body: str, reply_all: bool = False) -> Dict:
-        """回复邮件"""
+        """Reply to email"""
         action = "全部回复" if reply_all else "回复"
         log(f"↩️ {action}邮件 - ID: {message_id}")
         log(f"回复内容长度: {len(body)} 字符")
@@ -511,7 +513,7 @@ class OneDriverService:
         return {"status": f"{'reply_all' if reply_all else 'reply'}_sent", "status_code": result.status_code}
 
     def forward_mail(self, message_id: str, to_recipients: List[str], cc_recipients: List[str] = None, body: Optional[str] = None) -> Dict:
-        """转发邮件"""
+        """Forward email"""
         log(f"➡️ 转发邮件 - ID: {message_id}")
         log(f"转发给: {to_recipients}")
         if cc_recipients:
@@ -538,7 +540,7 @@ class OneDriverService:
         return {"status": "forwarded", "status_code": result.status_code}
 
     def get_mail_folders(self) -> Dict:
-        """获取所有邮件文件夹"""
+        """Get all email folders"""
         log(f"📁 获取邮件文件夹列表")
         
         result = self._make_request('GET', f"{self.BASE_URL}/me/mailFolders")
@@ -550,7 +552,7 @@ class OneDriverService:
         return folders_data
 
     def get_folder_messages(self, folder_id: str, filter_params=None) -> Generator[Dict, None, None]:
-        """获取文件夹中的邮件"""
+        """Get messages in folder"""
         log(f"📂 获取文件夹邮件 - 文件夹ID: {folder_id}")
         if filter_params:
             log(f"过滤参数: {filter_params}")
@@ -574,7 +576,7 @@ class OneDriverService:
             url = data.get('@odata.nextLink')
 
     def get_mail_attachments(self, message_id: str) -> Dict:
-        """获取邮件附件"""
+        """Get email attachments"""
         log(f"📎 获取邮件附件列表 - 邮件ID: {message_id}")
         
         result = self._make_request('GET', f"{self.BASE_URL}/me/messages/{message_id}/attachments")
@@ -586,7 +588,7 @@ class OneDriverService:
         return attachments_data
 
     def download_attachment(self, message_id: str, attachment_id: str) -> Dict:
-        """下载附件"""
+        """Download attachment"""
         log(f"⬇️ 下载附件 - 邮件ID: {message_id}, 附件ID: {attachment_id}")
         
         result = self._make_request('GET', f"{self.BASE_URL}/me/messages/{message_id}/attachments/{attachment_id}")
@@ -597,7 +599,7 @@ class OneDriverService:
         return attachment_data
 
     def search_mail(self, search_query: str, folder_id: Optional[str] = None) -> Dict:
-        """搜索邮件"""
+        """Search emails"""
         log(f"🔍 搜索邮件 - 关键词: {search_query}")
         if folder_id:
             log(f"搜索文件夹: {folder_id}")
@@ -612,7 +614,7 @@ class OneDriverService:
         result = self._make_request('GET', url, params=params)
         total_result = result.json()
         
-        # 处理分页
+        # Handle pagination
         page_count = 1
         data = result.json()
         while '@odata.nextLink' in data:
@@ -632,7 +634,7 @@ class OneDriverService:
         return total_result
 
     def get_single_mail_folder(self, folder_id: str) -> Dict:
-        """获取单个邮件文件夹信息"""
+        """Get single email folder information"""
         log(f"📁 获取文件夹信息 - ID: {folder_id}")
         
         result = self._make_request('GET', f"{self.BASE_URL}/me/mailFolders/{folder_id}")
@@ -643,7 +645,7 @@ class OneDriverService:
         return folder_data
 
     def save_each_mail_as_markdown(self, mail_data: Dict, saved_dir: str = 'mail'):
-        """将邮件保存为Markdown文件"""
+        """Save emails as Markdown files"""
         log(f"💾 保存邮件为Markdown - 目录: {saved_dir}")
         
         os.makedirs(saved_dir, exist_ok=True)
@@ -666,7 +668,7 @@ class OneDriverService:
         log(f"✅ 共保存 {saved_count} 封邮件")
 
     def save_attachments(self, message_id: str, save_dir: str = 'attachments') -> List[Dict]:
-        """保存邮件的所有附件"""
+        """Save all attachments of an email"""
         log(f"💾 保存附件 - 邮件ID: {message_id}, 目录: {save_dir}")
         
         if not os.path.exists(save_dir):
@@ -699,7 +701,7 @@ class OneDriverService:
         return saved_files
 
     def get_unread_count(self, folder_id: Optional[str] = None) -> int:
-        """获取未读邮件数量"""
+        """Get unread email count"""
         log(f"📊 获取未读邮件数量")
         
         if folder_id:
@@ -716,10 +718,10 @@ class OneDriverService:
         
         return unread_count
 
-    # ================= OneNote相关方法 =================
+    # ================= OneNote related methods =================
     
     def get_notebooks(self, user_email: Optional[str] = None) -> Generator:
-        """获取笔记本"""
+        """Get notebooks"""
         log(f"📓 获取笔记本列表")
         if user_email:
             log(f"指定用户: {user_email}")
@@ -731,19 +733,115 @@ class OneDriverService:
         
         return self.call_rest_api(url, lambda v, o: v)
 
-    def get_sections(self, notebook_id: str, user_email: Optional[str] = None) -> Generator:
-        """获取笔记本章节"""
+    def get_sections(self, notebook_id: str, user_email: Optional[str] = None, top: int = 100) -> Generator:
+        """
+        Get notebook sections (smart method selection, automatically handles large datasets)
+        
+        Prioritizes direct retrieval method, if encountering 403 error (dataset too large),
+        automatically switches to filtered query method (returns recently modified sections)
+        
+        Args:
+            notebook_id: Notebook ID
+            user_email: Optional user email
+            top: Number of items to return per request (default 100)
+        
+        Yields:
+            Section data dictionaries
+        """
         log(f"📑 获取章节 - 笔记本ID: {notebook_id}")
         
-        if user_email: 
-            url = f'/users/{user_email}/onenote/notebooks'
-        else: 
-            url = '/me/onenote/notebooks'
+        if user_email:
+            base_url = f'/users/{user_email}/onenote/notebooks'
+            sections_base = f'/users/{user_email}/onenote/sections'
+        else:
+            base_url = '/me/onenote/notebooks'
+            sections_base = '/me/onenote/sections'
         
-        return self.call_rest_api(f'{url}/{notebook_id}/sections', lambda v, o: v)
+        # Method 1: Direct retrieval (suitable for small datasets)
+        direct_url = f'{base_url}/{notebook_id}/sections?$top={top}'
+        log(f"🔄 尝试方法1: 直接获取章节")
+        log(f"请求URL: {direct_url}")
+        
+        try:
+            # Try direct retrieval
+            full_url = f"{self.BASE_URL}{direct_url}"
+            result = self._make_request('GET', full_url)
+            data = result.json()
+            
+            items_count = len(data.get('value', []))
+            log(f"✅ 方法1成功！获取到 {items_count} 个章节")
+            
+            # Use call_rest_api to handle pagination
+            for v in data.get('value', []):
+                yield v
+            
+            # Handle subsequent pagination
+            next_url = data.get('@odata.nextLink')
+            while next_url:
+                log(f"📄 获取下一页: {next_url}")
+                result = self._make_request('GET', next_url)
+                data = result.json()
+                
+                for v in data.get('value', []):
+                    yield v
+                
+                next_url = data.get('@odata.nextLink')
+            
+            return
+            
+        except requests.HTTPError as e:
+            if e.response.status_code == 403:
+                # 403 error, try alternative method
+                log(f"⚠️ 方法1失败 (403 Forbidden) - 可能数据量超过5000项", "WARN")
+                log(f"错误详情: {e.response.text[:200]}", "WARN")
+                log(f"🔄 自动切换到方法2: 过滤查询（最近修改）", "WARN")
+                
+                try:
+                    # Method 2: Filtered query (bypasses 5000 item limit)
+                    filter_url = f"{sections_base}?$filter=parentNotebook/id eq '{notebook_id}'&$top={min(top, 100)}&$orderby=lastModifiedDateTime desc"
+                    log(f"请求URL: {filter_url}")
+                    
+                    full_url = f"{self.BASE_URL}{filter_url}"
+                    result = self._make_request('GET', full_url)
+                    data = result.json()
+                    
+                    items_count = len(data.get('value', []))
+                    log(f"✅ 方法2成功！获取到 {items_count} 个章节（按最近修改排序）", "SUCCESS")
+                    log(f"📌 注意: 由于数据量限制，仅返回最近修改的章节", "INFO")
+                    
+                    # Handle data and pagination
+                    for v in data.get('value', []):
+                        yield v
+                    
+                    next_url = data.get('@odata.nextLink')
+                    page_count = 1
+                    while next_url:
+                        page_count += 1
+                        log(f"📄 获取第 {page_count} 页")
+                        result = self._make_request('GET', next_url)
+                        data = result.json()
+                        
+                        for v in data.get('value', []):
+                            yield v
+                        
+                        next_url = data.get('@odata.nextLink')
+                    
+                    return
+                    
+                except Exception as filter_error:
+                    log(f"❌ 方法2也失败: {filter_error}", "ERROR")
+                    raise Exception(f"无法获取章节 - 所有方法都失败。原始错误: {str(e)}, 备用方法错误: {str(filter_error)}")
+            else:
+                # Other HTTP errors
+                log(f"❌ 方法1失败 (HTTP {e.response.status_code}): {e}", "ERROR")
+                raise
+                
+        except Exception as e:
+            log(f"❌ 获取章节时发生未预期错误: {e}", "ERROR")
+            raise
 
     def get_pages(self, section_id: str, user_email: Optional[str] = None) -> Generator:
-        """获取章节页面"""
+        """Get section pages"""
         log(f"📄 获取页面 - 章节ID: {section_id}")
         
         if user_email: 
@@ -754,7 +852,7 @@ class OneDriverService:
         return self.call_rest_api(f'{url}/{section_id}/pages', lambda v, o: v)
 
     def get_page_content(self, page_id: str, user_email: Optional[str] = None) -> bytes:
-        """获取页面内容"""
+        """Get page content"""
         log(f"📝 获取页面内容 - 页面ID: {page_id}")
         
         if user_email: 
@@ -770,29 +868,479 @@ class OneDriverService:
         
         return result.content
 
-    # ================= Teams相关方法 =================
+    # ================= Teams related methods =================
     
     def get_chats(self) -> Generator[Chat, None, None]:
-        """获取Teams聊天"""
+        """Get Teams chats"""
         log(f"💬 获取Teams聊天列表")
         return self.call_rest_api('/me/chats', lambda v, o: Chat(v, o))
 
     def get_chat_messages(self, chat_id: str) -> Generator[Message, None, None]:
-        """获取聊天消息"""
+        """Get chat messages"""
         log(f"💬 获取聊天消息 - 聊天ID: {chat_id}")
         return self.call_rest_api(f'/chats/{chat_id}/messages', lambda v, o: Message(v, o))
 
+    def send_chat_message(self, chat_id: str, content: str, content_type: str = "text") -> Dict[str, Any]:
+        """
+        Send a message to a Teams chat
+        
+        Args:
+            chat_id: Chat ID to send message to
+            content: Message content
+            content_type: Content type - "text" or "html" (default: "text")
+            
+        Returns:
+            Dictionary containing sent message data
+        """
+        log(f"📤 发送聊天消息 - 聊天ID: {chat_id}")
+        log(f"内容类型: {content_type}, 内容长度: {len(content)} 字符")
+        
+        if not content or not content.strip():
+            error_msg = "消息内容不能为空"
+            log(f"❌ {error_msg}", "ERROR")
+            raise ValueError(error_msg)
+        
+        url = f"{self.BASE_URL}/chats/{chat_id}/messages"
+        
+        message_data = {
+            "body": {
+                "contentType": content_type,
+                "content": content
+            }
+        }
+        
+        result = self._make_request('POST', url, json=message_data)
+        response_data = result.json()
+        
+        log(f"✅ 消息发送成功 - 消息ID: {response_data.get('id', 'Unknown')}")
+        
+        return response_data
 
-# 便捷的工厂函数
+    def create_chat(self, chat_type: str, members: List[Dict[str, str]], topic: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a new Teams chat
+        
+        Args:
+            chat_type: Chat type - "oneOnOne" or "group"
+            members: List of member dictionaries with 'user_id' and optional 'roles'
+                    Example: [{"user_id": "user@example.com", "roles": ["owner"]}]
+            topic: Chat topic (required for group chats, optional for oneOnOne)
+            
+        Returns:
+            Dictionary containing created chat data
+        """
+        log(f"➕ 创建聊天 - 类型: {chat_type}")
+        if topic:
+            log(f"主题: {topic}")
+        log(f"成员数量: {len(members)}")
+        
+        if chat_type not in ["oneOnOne", "group"]:
+            error_msg = f"不支持的聊天类型: {chat_type}。仅支持 'oneOnOne' 或 'group'"
+            log(f"❌ {error_msg}", "ERROR")
+            raise ValueError(error_msg)
+        
+        if chat_type == "group" and not topic:
+            error_msg = "群聊必须提供主题"
+            log(f"❌ {error_msg}", "ERROR")
+            raise ValueError(error_msg)
+        
+        if not members or len(members) < 1:
+            error_msg = "至少需要一个成员"
+            log(f"❌ {error_msg}", "ERROR")
+            raise ValueError(error_msg)
+
+        # ── 兜底：获取当前用户，确保 caller 在 members 中 ──────────────────
+        try:
+            me_response = self._make_request('GET', f"{self.BASE_URL}/me")
+            me_data = me_response.json()
+            current_user_id = me_data.get('id', '')
+            current_user_upn = me_data.get('userPrincipalName', '')
+            log(f"🔍 当前用户: {current_user_upn} ({current_user_id})")
+        except Exception as e:
+            log(f"⚠️ 无法获取当前用户信息，跳过兜底检查: {e}", "WARN")
+            current_user_id = ''
+            current_user_upn = ''
+
+        if current_user_id or current_user_upn:
+            # 检查 caller 是否已在 members 列表中（匹配 id 或 email/upn）
+            member_ids = [m.get('user_id', '').lower() for m in members]
+            caller_in_members = (
+                current_user_id.lower() in member_ids or
+                current_user_upn.lower() in member_ids
+            )
+
+            if not caller_in_members:
+                log(f"⚠️ 当前用户不在 members 列表中，自动补充: {current_user_upn}", "WARN")
+                members = [{"user_id": current_user_id, "roles": ["owner"]}] + list(members)
+                log(f"✅ 已将当前用户插入 members 首位，新成员数量: {len(members)}")
+        # ────────────────────────────────────────────────────────────────────
+
+        url = f"{self.BASE_URL}/chats"
+        
+        # Build member list
+        chat_members = []
+        for member in members:
+            user_id = member.get('user_id')
+            if not user_id:
+                error_msg = "每个成员必须包含 'user_id'"
+                log(f"❌ {error_msg}", "ERROR")
+                raise ValueError(error_msg)
+            
+            member_data = {
+                "@odata.type": "#microsoft.graph.aadUserConversationMember",
+                "roles": member.get('roles', ["owner"]),
+                "user@odata.bind": f"https://graph.microsoft.com/v1.0/users('{user_id}')"
+            }
+            chat_members.append(member_data)
+        
+        chat_data = {
+            "chatType": chat_type,
+            "members": chat_members
+        }
+        
+        if topic:
+            chat_data["topic"] = topic
+        
+        result = self._make_request('POST', url, json=chat_data)
+        response_data = result.json()
+        
+        log(f"✅ 聊天创建成功 - 聊天ID: {response_data.get('id', 'Unknown')}")
+        
+        return response_data
+
+    def update_chat_topic(self, chat_id: str, topic: str) -> Dict[str, Any]:
+        """
+        Update chat topic (group chats only)
+        
+        Args:
+            chat_id: Chat ID to update
+            topic: New topic for the chat
+            
+        Returns:
+            Dictionary containing update status
+        """
+        log(f"✏️ 更新聊天主题 - 聊天ID: {chat_id}")
+        log(f"新主题: {topic}")
+        
+        if not topic or not topic.strip():
+            error_msg = "主题不能为空"
+            log(f"❌ {error_msg}", "ERROR")
+            raise ValueError(error_msg)
+        
+        url = f"{self.BASE_URL}/chats/{chat_id}"
+        
+        update_data = {
+            "topic": topic
+        }
+        
+        result = self._make_request('PATCH', url, json=update_data)
+        
+        log(f"✅ 聊天主题更新成功")
+        
+        return {"status": "updated", "status_code": result.status_code, "chat_id": chat_id, "new_topic": topic}
+
+
+    def get_file_content(self, path: str, max_size_mb: float = 1.0) -> Dict[str, Any]:
+        """
+        Get file content
+        
+        Supported file types:
+        - Text files: Return content directly
+        - xlsx files: Convert to CSV format and return all worksheets
+        - Other files: Return download link
+        
+        Args:
+            path: File path
+            max_size_mb: Maximum size limit for text files (MB), xlsx files fixed at 5MB
+            
+        Returns:
+            Dictionary containing file content or download link
+        """
+        try:
+            # Get file information
+            item_info = self.get_my_drive_item(path)
+            
+            # Check if it's a file
+            if 'file' not in item_info:
+                return {
+                    "success": False,
+                    "error": f"Path '{path}' is not a file"
+                }
+            
+            file_name = item_info.get('name', 'unknown')
+            file_size = item_info.get('size', 0)
+            size_mb = file_size / (1024 * 1024)
+            mime_type = item_info.get('file', {}).get('mimeType', '')
+            
+            # Get download URL
+            download_url = item_info.get('@microsoft.graph.downloadUrl')
+            if not download_url:
+                return {
+                    "success": False,
+                    "error": "No download URL available for this file"
+                }
+            
+            # Check if it's an Excel file
+            is_xlsx = (
+                file_name.lower().endswith('.xlsx') or 
+                'spreadsheet' in mime_type.lower() or
+                'excel' in mime_type.lower()
+            )
+            
+            if is_xlsx:
+                # Excel file: 5MB limit, convert to CSV
+                if size_mb > 5.0:
+                    return {
+                        "type": "xlsx_too_large",
+                        "name": file_name,
+                        "size": file_size,
+                        "size_mb": round(size_mb, 2),
+                        "download_link": download_url,
+                        "message": f"Excel file is too large ({size_mb:.2f}MB). Maximum allowed: 5MB. Please use the download link."
+                    }
+                
+                # Download file content
+                content_response = self._make_request('GET', download_url)
+                content = content_response.content
+                
+                # Process xlsx file
+                return self._process_xlsx_to_csv(content, file_name, max_size_mb=5.0)
+            
+            # Determine if it's a text file
+            text_extensions = {
+                '.txt', '.md', '.csv', '.json', '.xml', '.yaml', '.yml',
+                '.py', '.js', '.ts', '.java', '.cpp', '.c', '.h', '.cs', '.go',
+                '.html', '.css', '.scss', '.less', '.sh', '.bash', '.bat',
+                '.log', '.conf', '.config', '.ini', '.env', '.gitignore',
+                '.sql', '.r', '.rb', '.php', '.swift', '.kt', '.rs', '.dart',
+                '.vue', '.jsx', '.tsx', '.svelte', '.astro'
+            }
+            
+            file_ext = '.' + file_name.split('.')[-1].lower() if '.' in file_name else ''
+            is_text = file_ext in text_extensions or 'text' in mime_type.lower()
+            
+            if not is_text:
+                # Binary file: return download link
+                return {
+                    "type": "binary",
+                    "name": file_name,
+                    "size": file_size,
+                    "size_mb": round(size_mb, 2),
+                    "mime_type": mime_type,
+                    "download_link": download_url,
+                    "message": "This is a binary file. Please use the download link to access it."
+                }
+            
+            # Text file processing
+            if size_mb > max_size_mb:
+                return {
+                    "type": "text_too_large",
+                    "name": file_name,
+                    "size": file_size,
+                    "size_mb": round(size_mb, 2),
+                    "download_link": download_url,
+                    "message": f"Text file is too large ({size_mb:.2f}MB). Maximum allowed: {max_size_mb}MB. Please use the download link."
+                }
+            
+            # Download text file content
+            content_response = self._make_request('GET', download_url)
+            content = content_response.content
+            
+            # Try to decode text
+            encodings = ['utf-8', 'gbk', 'gb2312', 'gb18030', 'big5', 'latin1']
+            text_content = None
+            used_encoding = None
+            
+            for encoding in encodings:
+                try:
+                    text_content = content.decode(encoding)
+                    used_encoding = encoding
+                    break
+                except (UnicodeDecodeError, LookupError):
+                    continue
+            
+            if text_content is None:
+                return {
+                    "type": "decode_error",
+                    "name": file_name,
+                    "size": file_size,
+                    "size_mb": round(size_mb, 2),
+                    "download_link": download_url,
+                    "message": "Unable to decode file as text. Please use the download link."
+                }
+            
+            return {
+                "type": "text",
+                "name": file_name,
+                "size": file_size,
+                "size_mb": round(size_mb, 2),
+                "content": text_content,
+                "encoding": used_encoding,
+                "char_count": len(text_content),
+                "line_count": text_content.count('\n') + 1
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    def get_download_link(self, path: str) -> Dict[str, Any]:
+        """
+        Get file download link
+        
+        Args:
+            path: File path
+            
+        Returns:
+            Dictionary containing download link
+        """
+        log(f"🔗 获取下载链接 - 路径: {path}")
+        
+        try:
+            item_info = self.get_my_drive_item(path)
+            
+            # Check if it's a file
+            if 'folder' in item_info:
+                error_msg = f"路径 '{path}' 是文件夹，不是文件"
+                log(f"❌ {error_msg}", "ERROR")
+                return {
+                    "success": False,
+                    "error": error_msg
+                }
+            
+            file_name = item_info.get('name', 'unknown')
+            file_size = item_info.get('size', 0)
+            download_url = item_info.get('@microsoft.graph.downloadUrl')
+            
+            if not download_url:
+                error_msg = "无法获取下载链接"
+                log(f"❌ {error_msg}", "ERROR")
+                return {
+                    "success": False,
+                    "error": error_msg
+                }
+            
+            log(f"✅ 下载链接获取成功: {file_name}")
+            
+            return {
+                "success": True,
+                "name": file_name,
+                "size": file_size,
+                "size_mb": round(file_size / (1024 * 1024), 2),
+                "download_link": download_url
+            }
+            
+        except Exception as e:
+            log(f"❌ 获取下载链接失败: {e}", "ERROR")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    def _process_xlsx_to_csv(self, content: bytes, filename: str, max_size_mb: float = 5.0) -> Dict[str, Any]:
+        """
+        Convert xlsx file content to CSV format
+        
+        Args:
+            content: Binary content of xlsx file
+            filename: File name
+            max_size_mb: Maximum processing size (MB)
+            
+        Returns:
+            Dictionary containing CSV data for all worksheets
+        """
+        import csv
+        
+        try:
+            # Check file size
+            size_mb = len(content) / (1024 * 1024)
+            if size_mb > max_size_mb:
+                return {
+                    "success": False,
+                    "type": "xlsx_too_large",
+                    "name": filename,
+                    "size": len(content),
+                    "size_mb": round(size_mb, 2),
+                    "error": f"Excel file too large ({size_mb:.2f}MB). Maximum allowed: {max_size_mb}MB"
+                }
+            
+            # Load workbook
+            workbook = load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+            
+            sheets_data = {}
+            total_rows = 0
+            total_cells = 0
+            
+            # Process each worksheet
+            for sheet_name in workbook.sheetnames:
+                sheet = workbook[sheet_name]
+                
+                # Convert to CSV format
+                csv_output = io.StringIO()
+                csv_writer = csv.writer(csv_output)
+                
+                row_count = 0
+                for row in sheet.iter_rows(values_only=True):
+                    # Skip completely empty rows
+                    if all(cell is None or str(cell).strip() == '' for cell in row):
+                        continue
+                    
+                    # Convert None to empty string, other values to string
+                    cleaned_row = [str(cell) if cell is not None else '' for cell in row]
+                    csv_writer.writerow(cleaned_row)
+                    row_count += 1
+                    total_cells += len(cleaned_row)
+                
+                csv_content = csv_output.getvalue()
+                csv_output.close()
+                
+                # Only save non-empty worksheets
+                if row_count > 0:
+                    sheets_data[sheet_name] = csv_content
+                    total_rows += row_count
+            
+            workbook.close()
+            
+            if not sheets_data:
+                return {
+                    "success": False,
+                    "type": "xlsx_empty",
+                    "name": filename,
+                    "error": "Excel file contains no data"
+                }
+            
+            return {
+                "success": True,
+                "type": "xlsx",
+                "name": filename,
+                "size": len(content),
+                "size_mb": round(size_mb, 2),
+                "sheets": sheets_data,
+                "sheet_count": len(sheets_data),
+                "total_rows": total_rows,
+                "total_cells": total_cells,
+                "sheet_names": list(sheets_data.keys())
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "type": "xlsx_parse_error",
+                "name": filename,
+                "error": f"Failed to parse Excel file: {str(e)}"
+            }
+
+# Convenient factory function
 async def create_onedrive_service(token: str) -> OneDriverService:
     """
-    创建并认证OneDrive服务实例
+    Create and authenticate OneDrive service instance
     
     Args:
         token: unique_token
         
     Returns:
-        已认证的OneDriverService实例
+        Authenticated OneDriverService instance
     """
     log(f"🏭 工厂函数: 创建 OneDrive 服务")
     log(f"Token: {token[:20]}...{token[-10:]}")

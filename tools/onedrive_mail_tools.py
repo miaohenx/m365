@@ -1,6 +1,6 @@
 """
-OneDrive 邮件工具模块
-纯粹的工具函数，依赖服务层
+OneDrive Email Tools Module
+Pure utility functions that depend on service layer
 """
 from typing import Any, Dict, List, Optional
 from datetime import datetime
@@ -12,7 +12,7 @@ from exceptions import MongoDBError
 from utils import get_token_from_context
 
 def register_mail_tools(mcp_instance):
-    """注册 OneDrive 邮件工具到 MCP 实例"""
+    """Register OneDrive email tools to MCP instance"""
     
     @mcp_instance.tool
     async def list_emails(
@@ -29,7 +29,7 @@ def register_mail_tools(mcp_instance):
         """
         List emails from a OneDrive/Outlook mailbox.
         
-        参数说明:
+        Args:
         - top (int): Maximum number of emails to return (1-1000, default: 10)
         - select (str): Comma-separated list of properties to return
         - filter (str): OData filter expression for conditional filtering
@@ -54,14 +54,12 @@ def register_mail_tools(mcp_instance):
                 "error": "No Authorization token found in request headers"
             }
         
-        # 构建 params 字典
         params = {
             '$top': top,
             '$select': select,
             '$orderby': orderby
         }
         
-        # 添加可选参数
         if filter:
             params['$filter'] = filter
         if skip is not None:
@@ -76,12 +74,10 @@ def register_mail_tools(mcp_instance):
         print(f"[MCP DEBUG] list_emails 被调用，token: {token[:20]}..., params: {params}, folder: {folder}", file=sys.stderr)
         
         try:
-            # 创建并认证OneDrive服务
             onedrive = await create_onedrive_service(token)
             
-            # 获取邮件列表，传入 folder 参数
-            mail_generator = onedrive.get_mail_with_filter(lambda: params, folder=folder)  # 👈 添加 folder 参数
-            mail_data = next(mail_generator)  # 获取第一页数据
+            mail_generator = onedrive.get_mail_with_filter(lambda: params, folder=folder)
+            mail_data = next(mail_generator)
             
             print(f"[MCP] 邮件列表获取成功，数量: {len(mail_data.get('value', []))}", file=sys.stderr)
             return {
@@ -115,7 +111,7 @@ def register_mail_tools(mcp_instance):
         """
         Send an email
         
-        参数说明:
+        Args:
         - to (List[str]): List of recipient email addresses (required)
         - subject (str): The subject of the email (required)
         - body (str): The body content of the email (required)
@@ -133,14 +129,11 @@ def register_mail_tools(mcp_instance):
                 "error": "No Authorization token found in request headers"
             }
         
-        # 处理可选的cc参数
         cc = cc or []
         
         try:
-            # 创建并认证OneDrive服务
             onedrive = await create_onedrive_service(token)
             
-            # 发送邮件
             result = onedrive.send_mail(to, cc, subject, body)
             
             print(f"[MCP] 邮件发送成功", file=sys.stderr)
@@ -183,10 +176,8 @@ def register_mail_tools(mcp_instance):
             }
         
         try:
-            # 创建并认证OneDrive服务
             onedrive = await create_onedrive_service(token)
             
-            # 获取邮件文件夹
             folders = onedrive.get_mail_folders()
             
             print(f"[MCP] 邮件文件夹获取成功，数量: {len(folders.get('value', []))}", file=sys.stderr)
@@ -226,7 +217,7 @@ def register_mail_tools(mcp_instance):
         """
         Read mails in a specific folder
         
-        参数说明:
+        Args:
         - folder_id (str): The ID of the folder to read mails from (required)
         - top (int): Maximum number of emails to return (1-1000, default: 10)
         - select (str): Comma-separated list of properties to return
@@ -249,14 +240,12 @@ def register_mail_tools(mcp_instance):
                 "error": "No Authorization token found in request headers"
             }
         
-        # 构建 filter_params 字典
         filter_params = {
             '$top': top,
             '$select': select,
             '$orderby': orderby
         }
         
-        # 添加可选参数
         if filter:
             filter_params['$filter'] = filter
         if skip is not None:
@@ -271,12 +260,10 @@ def register_mail_tools(mcp_instance):
         print(f"[MCP DEBUG] read_mails_in_folder 被调用，token: {token[:20]}..., folder_id: {folder_id}", file=sys.stderr)
         
         try:
-            # 创建并认证OneDrive服务
             onedrive = await create_onedrive_service(token)
             
-            # 获取文件夹中的邮件
             mail_generator = onedrive.get_folder_messages(folder_id, filter_params)
-            mail_data = next(mail_generator)  # 获取第一页数据
+            mail_data = next(mail_generator)
             
             print(f"[MCP] 文件夹邮件获取成功，数量: {len(mail_data.get('value', []))}", file=sys.stderr)
             return {
@@ -305,7 +292,7 @@ def register_mail_tools(mcp_instance):
         """
         Get mail attachments
         
-        参数说明:
+        Args:
         - mail_id (str): The ID of the mail to get attachments from (required)
         
         Returns:
@@ -321,10 +308,8 @@ def register_mail_tools(mcp_instance):
             }
         
         try:
-            # 创建并认证OneDrive服务
             onedrive = await create_onedrive_service(token)
             
-            # 获取邮件附件
             attachments = onedrive.get_mail_attachments(mail_id)
             
             print(f"[MCP] 邮件附件获取成功，数量: {len(attachments.get('value', []))}", file=sys.stderr)
@@ -354,7 +339,7 @@ def register_mail_tools(mcp_instance):
         """
         Download mail attachment
         
-        参数说明:
+        Args:
         - mail_id (str): The ID of the mail containing the attachment (required)
         - attachment_id (str): The ID of the attachment to download (required)
         
@@ -371,10 +356,8 @@ def register_mail_tools(mcp_instance):
             }
         
         try:
-            # 创建并认证OneDrive服务
             onedrive = await create_onedrive_service(token)
             
-            # 下载附件
             attachment_data = onedrive.download_attachment(mail_id, attachment_id)
             
             print(f"[MCP] 附件下载成功", file=sys.stderr)
@@ -404,7 +387,7 @@ def register_mail_tools(mcp_instance):
         """
         Reply to a mail
         
-        参数说明:
+        Args:
         - mail_id (str): The ID of the mail to reply to (required)
         - body (str): The body content of the reply (required)
         
@@ -421,10 +404,8 @@ def register_mail_tools(mcp_instance):
             }
         
         try:
-            # 创建并认证OneDrive服务
             onedrive = await create_onedrive_service(token)
             
-            # 回复邮件
             result = onedrive.reply_to_mail(mail_id, body)
             
             print(f"[MCP] 邮件回复成功", file=sys.stderr)
@@ -454,23 +435,23 @@ def register_mail_tools(mcp_instance):
         sender_email: str,
         top: int = 10,
         select: str = "subject,receivedDateTime,from,id,bodyPreview",
-        orderby: Optional[str] = None,  # 改为可选，默认为 None
+        orderby: Optional[str] = None,
         folder_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        根据发件人邮箱地址查找邮件（精确匹配）
+        Find emails by sender email address (exact match)
         
-        参数说明:
-        - sender_email (str): 发件人的邮箱地址 (required)
-        - top (int): 返回的最大邮件数量 (default: 10)
-        - select (str): 要返回的邮件字段，逗号分隔
-        - orderby (str): 排序方式，留空使用默认排序 (optional, 不建议使用以避免复杂度错误)
-        - folder_id (str): 指定文件夹ID，如果不指定则搜索所有邮件 (optional)
+        Args:
+        - sender_email (str): Sender's email address (required)
+        - top (int): Maximum number of emails to return (default: 10)
+        - select (str): Comma-separated list of email fields to return
+        - orderby (str): Sort order, leave empty to use default sorting (optional, not recommended to avoid complexity errors)
+        - folder_id (str): Specific folder ID, if not specified search all emails (optional)
         
         Returns:
-            dict: 包含成功状态、邮件数据和错误信息的字典
-        使用场景: 当需要查找特定发件人邮箱发送的所有邮件时使用
-        注意: 邮件默认按接收时间倒序排列，不需要额外指定排序
+            dict: Dictionary containing success status, email data, and error information
+        Use case: When you need to find all emails sent by a specific sender email address
+        Note: Emails are sorted by received time in descending order by default, no need to specify additional sorting
         """
         token = get_token_from_context()
         
@@ -481,7 +462,6 @@ def register_mail_tools(mcp_instance):
                 "error": "No Authorization token found in request headers"
             }
         
-        # 使用正确的OData语法
         filter_expression = f"from/emailAddress/address eq '{sender_email}'"
         
         params = {
@@ -490,7 +470,6 @@ def register_mail_tools(mcp_instance):
             '$filter': filter_expression
         }
         
-        # 只有当用户明确指定时才添加 orderby（不推荐）
         if orderby:
             params['$orderby'] = orderby
         
@@ -537,18 +516,18 @@ def register_mail_tools(mcp_instance):
         orderby: str = "receivedDateTime desc"
     ) -> Dict[str, Any]:
         """
-        通过获取所有邮件然后在客户端过滤发件人姓名
+        Search emails by sender display name using client-side filtering
         
-        参数说明:
-        - sender_name (str): 发件人的姓名（支持中文和特殊字符）(required)
-        - top (int): 返回的最大邮件数量 (default: 10)
-        - select (str): 要返回的邮件字段，逗号分隔
-        - orderby (str): 排序方式 (default: "receivedDateTime desc")
+        Args:
+        - sender_name (str): Sender's display name (supports Chinese and special characters) (required)
+        - top (int): Maximum number of emails to return (default: 10)
+        - select (str): Comma-separated list of email fields to return
+        - orderby (str): Sort order (default: "receivedDateTime desc")
         
         Returns:
-            dict: 包含成功状态、邮件数据和错误信息的字典
-        使用场景: 当需要根据发件人姓名查找邮件，特别是包含中文或特殊字符时使用
-        注意: 此方法先获取更多邮件，然后在本地过滤，适用于复杂姓名搜索
+            dict: Dictionary containing success status, email data, and error information
+        Use case: When you need to find emails by sender's display name, especially with Chinese or special characters
+        Note: This method fetches more emails first, then filters locally, suitable for complex name searches
         """
         token = get_token_from_context()
         
@@ -559,14 +538,12 @@ def register_mail_tools(mcp_instance):
                 "error": "No Authorization token found in request headers"
             }
         
-        # 获取更多邮件进行本地过滤（因为服务器端搜索对中文支持有限）
-        fetch_count = min(top * 10, 100)  # 获取更多邮件以便过滤
+        fetch_count = min(top * 10, 100)
         
         params = {
             '$top': fetch_count,
             '$select': select,
             '$orderby': orderby
-            # 不使用 $search 或 $filter，直接获取邮件列表
         }
         
         print(f"[MCP DEBUG] search_emails_by_sender_display_name 被调用，sender_name: {sender_name}", file=sys.stderr)
@@ -576,7 +553,6 @@ def register_mail_tools(mcp_instance):
             mail_generator = onedrive.get_mail_with_filter(lambda: params)
             mail_data = next(mail_generator)
             
-            # 在客户端过滤邮件
             filtered_emails = []
             emails = mail_data.get('value', [])
             
@@ -584,14 +560,11 @@ def register_mail_tools(mcp_instance):
                 from_info = email.get('from', {})
                 email_address_info = from_info.get('emailAddress', {})
                 display_name = email_address_info.get('name', '')
-                # 检查发件人姓名是否包含搜索关键词（不区分大小写）
                 if sender_name.lower() in display_name.lower():
                     filtered_emails.append(email)
-                    # 达到请求的数量就停止
                     if len(filtered_emails) >= top:
                         break
             
-            # 构建返回结果
             result_data = {
                 'value': filtered_emails[:top],
                 '@odata.count': len(filtered_emails)
@@ -628,19 +601,19 @@ def register_mail_tools(mcp_instance):
         orderby: str = "receivedDateTime desc"
     ) -> Dict[str, Any]:
         """
-        根据日期范围查找邮件
+        Find emails by date range
         
-        参数说明:
-        - start_date (str): 开始日期，格式: YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SS (required)
-        - end_date (str): 结束日期，格式同上，如果不提供则搜索从开始日期到现在 (optional)
-        - top (int): 返回的最大邮件数量 (default: 10)
-        - select (str): 要返回的邮件字段，逗号分隔
-        - orderby (str): 排序方式 (default: "receivedDateTime desc")
+        Args:
+        - start_date (str): Start date, format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS (required)
+        - end_date (str): End date, same format as above, if not provided search from start date to now (optional)
+        - top (int): Maximum number of emails to return (default: 10)
+        - select (str): Comma-separated list of email fields to return
+        - orderby (str): Sort order (default: "receivedDateTime desc")
         
         Returns:
-            dict: 包含成功状态、邮件数据和错误信息的字典
-        使用场景: 当需要查找特定时间段内的邮件时使用
-        日期格式示例: "2024-01-01", "2024-01-01T09:00:00"
+            dict: Dictionary containing success status, email data, and error information
+        Use case: When you need to find emails within a specific time period
+        Date format examples: "2024-01-01", "2024-01-01T09:00:00"
         """
         token = get_token_from_context()
         
@@ -652,7 +625,6 @@ def register_mail_tools(mcp_instance):
             }
         
         try:
-            # 处理日期格式，确保是ISO格式
             if 'T' not in start_date:
                 start_date = f"{start_date}T00:00:00Z"
             elif not start_date.endswith('Z'):
@@ -664,10 +636,8 @@ def register_mail_tools(mcp_instance):
                 elif not end_date.endswith('Z'):
                     end_date = f"{end_date}Z"
                 
-                # 构建日期范围过滤器
                 filter_expression = f"receivedDateTime ge {start_date} and receivedDateTime le {end_date}"
             else:
-                # 只有开始日期，搜索从该日期到现在
                 filter_expression = f"receivedDateTime ge {start_date}"
             
             params = {
@@ -714,19 +684,19 @@ def register_mail_tools(mcp_instance):
         exact_match: bool = False
     ) -> Dict[str, Any]:
         """
-        根据主题关键词查找邮件
+        Find emails by subject keyword
         
-        参数说明:
-        - subject_keyword (str): 主题中要搜索的关键词 (required)
-        - top (int): 返回的最大邮件数量 (default: 10)
-        - select (str): 要返回的邮件字段，逗号分隔
-        - orderby (str): 排序方式 (default: "receivedDateTime desc")
-        - exact_match (bool): 是否精确匹配整个主题 (default: False, 进行包含匹配)
+        Args:
+        - subject_keyword (str): Keyword to search in subject (required)
+        - top (int): Maximum number of emails to return (default: 10)
+        - select (str): Comma-separated list of email fields to return
+        - orderby (str): Sort order (default: "receivedDateTime desc")
+        - exact_match (bool): Whether to match the entire subject exactly (default: False, performs contains match)
         
         Returns:
-            dict: 包含成功状态、邮件数据和错误信息的字典
-        使用场景: 当需要根据邮件主题内容查找邮件时使用
-        支持中文和特殊字符，使用客户端过滤确保兼容性
+            dict: Dictionary containing success status, email data, and error information
+        Use case: When you need to find emails based on email subject content
+        Supports Chinese and special characters, uses client-side filtering for compatibility
         """
         token = get_token_from_context()
         
@@ -737,8 +707,7 @@ def register_mail_tools(mcp_instance):
                 "error": "No Authorization token found in request headers"
             }
         
-        # 获取更多邮件进行本地过滤（避免服务器端搜索的编码问题）
-        fetch_count = min(top * 5, 200)  # 获取更多邮件以便过滤
+        fetch_count = min(top * 5, 200)
         
         params = {
             '$top': fetch_count,
@@ -753,7 +722,6 @@ def register_mail_tools(mcp_instance):
             mail_generator = onedrive.get_mail_with_filter(lambda: params)
             mail_data = next(mail_generator)
             
-            # 在客户端过滤邮件主题
             filtered_emails = []
             emails = mail_data.get('value', [])
             
@@ -761,7 +729,6 @@ def register_mail_tools(mcp_instance):
                 subject = email.get('subject', '').lower()
                 keyword_lower = subject_keyword.lower()
                 
-                # 根据匹配模式进行过滤
                 if exact_match:
                     if subject == keyword_lower:
                         filtered_emails.append(email)
@@ -769,11 +736,9 @@ def register_mail_tools(mcp_instance):
                     if keyword_lower in subject:
                         filtered_emails.append(email)
                 
-                # 达到请求的数量就停止
                 if len(filtered_emails) >= top:
                     break
             
-            # 构建返回结果
             result_data = {
                 'value': filtered_emails[:top],
                 '@odata.count': len(filtered_emails)
@@ -809,17 +774,17 @@ def register_mail_tools(mcp_instance):
         orderby: str = "receivedDateTime desc"
     ) -> Dict[str, Any]:
         """
-        查找最近几天内的邮件
+        Find emails from recent days
         
-        参数说明:
-        - days (int): 最近多少天内的邮件 (required, 例如: 1=今天, 7=最近一周)
-        - top (int): 返回的最大邮件数量 (default: 10)
-        - select (str): 要返回的邮件字段，逗号分隔
-        - orderby (str): 排序方式 (default: "receivedDateTime desc")
+        Args:
+        - days (int): Number of recent days to search (required, e.g.: 1=today, 7=last week)
+        - top (int): Maximum number of emails to return (default: 10)
+        - select (str): Comma-separated list of email fields to return
+        - orderby (str): Sort order (default: "receivedDateTime desc")
         
         Returns:
-            dict: 包含成功状态、邮件数据和错误信息的字典
-        使用场景: 当需要快速查找最近几天的邮件时使用
+            dict: Dictionary containing success status, email data, and error information
+        Use case: When you need to quickly find emails from the last few days
         """
         token = get_token_from_context()
         
@@ -833,11 +798,9 @@ def register_mail_tools(mcp_instance):
         try:
             from datetime import datetime, timedelta
             
-            # 计算开始日期
             start_date = datetime.now() - timedelta(days=days)
             start_date_str = start_date.strftime("%Y-%m-%dT00:00:00Z")
             
-            # 构建过滤器
             filter_expression = f"receivedDateTime ge {start_date_str}"
             
             params = {
@@ -883,17 +846,17 @@ def register_mail_tools(mcp_instance):
         orderby: str = "receivedDateTime desc"
     ) -> Dict[str, Any]:
         """
-        仅通过邮箱地址精确查找邮件（最可靠的方法）
+        Find emails by email address only (most reliable method)
         
-        参数说明:
-        - sender_email (str): 发件人的邮箱地址 (required)
-        - top (int): 返回的最大邮件数量 (default: 10)
-        - select (str): 要返回的邮件字段，逗号分隔
-        - orderby (str): 排序方式 (default: "receivedDateTime desc")
+        Args:
+        - sender_email (str): Sender's email address (required)
+        - top (int): Maximum number of emails to return (default: 10)
+        - select (str): Comma-separated list of email fields to return
+        - orderby (str): Sort order (default: "receivedDateTime desc")
         
         Returns:
-            dict: 包含成功状态、邮件数据和错误信息的字典
-        使用场景: 当知道确切的发件人邮箱地址时使用，最可靠的搜索方法
+            dict: Dictionary containing success status, email data, and error information
+        Use case: When you know the exact sender email address, most reliable search method
         """
         token = get_token_from_context()
         
@@ -904,7 +867,6 @@ def register_mail_tools(mcp_instance):
                 "error": "No Authorization token found in request headers"
             }
         
-        # 使用 $filter 进行精确的邮箱地址匹配
         filter_expression = f"from/emailAddress/address eq '{sender_email}'"
         
         params = {
@@ -953,7 +915,7 @@ def register_mail_tools(mcp_instance):
         """
         Forward a mail
         
-        参数说明:
+        Args:
         - mail_id (str): The ID of the mail to forward (required)
         - to (List[str]): The recipients of the forwarded mail (required)
         - body (str): The body content of the forwarded mail (required)
@@ -971,14 +933,11 @@ def register_mail_tools(mcp_instance):
                 "error": "No Authorization token found in request headers"
             }
         
-        # 处理可选的cc参数
         cc = cc or []
         
         try:
-            # 创建并认证OneDrive服务
             onedrive = await create_onedrive_service(token)
             
-            # 转发邮件
             result = onedrive.forward_mail(mail_id, to, cc, body)
             
             print(f"[MCP] 邮件转发成功", file=sys.stderr)
@@ -1002,4 +961,3 @@ def register_mail_tools(mcp_instance):
                 "data": None,
                 "error": str(e)
             }
-    
